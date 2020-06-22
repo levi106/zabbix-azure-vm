@@ -1,0 +1,42 @@
+name: Deploy Zabbix
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
+      
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Deploy ARM Template
+        uses: azure/CLI@v1
+        with:
+          inlineScript: |
+            result=$(az deployment group create -g zabbix --template-file ./template.json --parameters authenticationType=sshPublicKey adminPasswordOrKey="${{ secrets.SSH_PUBLIC_KEY }}")
+            echo ::set-env name=VM_USER_NAME::$(echo $result | jq -r ".properties.outputs.adminUsername.value")
+            echo ::set-env name=VM_FQDN::$(echo $result | jq -r ".properties.outputs.fqdn.value")
+
+      - name: Lint Ansible Playbook
+        uses: ansible/ansible-lint-action@master
+        with:
+          targets: |
+            ansible/zabbix.yml
+
+      - name: Run ansible playbook
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${VM_FQDN}" >> ~/.ssh/known_hosts
+          ansible-playbook -u ${VM_USER_NAME} -i ${VM_FQDN}, zabbix.yml
+        working-directory: ./ansible
