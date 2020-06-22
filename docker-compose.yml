@@ -1,0 +1,36 @@
+version: '2'
+
+services:
+  mysql:
+    image: mysql:5.7
+    volumes:
+      - zabbix-db:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE="zabbix"
+      - MYSQL_USER="zabbix"
+      - MYSQL_PASSWORD="zabbix_pwd"
+      - MYSQL_ROOT_PASSWORD="root_pwd"
+    networks:
+      - zabbix-nw
+    restart: always
+
+  zabbix:
+    image: zabbix/zabbix-server-mysql:5.0
+    environment:
+      - DB_SERVER_HOST="mysql"
+      - MYSQL_USER="zabbix"
+      - MYSQL_PASSWORD="zabbix_pwd"
+    depends_on:
+      - mysql
+    links:
+      - mysql
+    networks:
+      - zabbix-nw
+    restart: always
+
+  volumes:
+    zabbix-db:
+      driver: local
+
+  networks:
+    zabbix-nw: {}
